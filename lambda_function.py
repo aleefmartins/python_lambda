@@ -4,6 +4,12 @@ import { ElementRef, NO_ERRORS_SCHEMA } from '@angular/core';
 import { of } from 'rxjs';
 import { WelcomeComponent } from './welcome.component';
 
+// Ajuste esses imports para o real local dos serviços:
+import { CadastrarPixService } from '../cadastrar-pix.service'; 
+import { TracksServiceWeb } from '../tracks.service-web';
+// Caso exista um RouterService:
+import { RouterService } from '../router.service';
+
 /* ──────────────── FAKES / STUBS ──────────────── */
 class FakeCadastrarPixService {
   cadastrarChavePix = jest.fn(() => of({ ok: true }));
@@ -12,8 +18,13 @@ class FakeTracksServiceWeb {
   clickEvent = jest.fn();
   pageLoad   = jest.fn();
 }
+/** Se seu componente injeta RouterService, faça um stub: */
+class FakeRouterService {
+  // Adicione aqui qualquer método que o componente use
+  navigate = jest.fn();
+}
 
-/* cria um objeto que simula HTMLElement / HTMLImageElement */
+/* Cria algo que simula HTMLElement / HTMLImageElement */
 function fakeDomEl(): any {
   return {
     style:         {},
@@ -24,34 +35,38 @@ function fakeDomEl(): any {
   };
 }
 
-/* util para preencher rapidamente @ViewChilds */
+/* Util para preencher manualmente as dezenas de @ViewChilds */
 function assignFakeEl<T extends object>(target: T, prop: keyof T) {
   (target as any)[prop] = new ElementRef(fakeDomEl());
 }
-/* ─────────────────────────────────────────────── */
 
 describe('WelcomeComponent – high‑coverage spec', () => {
   let component: WelcomeComponent;
   let fixture: ComponentFixture<WelcomeComponent>;
   let tracks: FakeTracksServiceWeb;
 
-  beforeAll(() => jest.useFakeTimers());
+  beforeAll(() => {
+    jest.useFakeTimers();
+  });
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       declarations: [WelcomeComponent],
+      /** IMPORTANTE: aqui mapear o serviço real → fake/stub */
       providers: [
-        { provide: FakeCadastrarPixService, useClass: FakeCadastrarPixService },
-        { provide: FakeTracksServiceWeb,    useClass: FakeTracksServiceWeb  },
+        { provide: CadastrarPixService, useClass: FakeCadastrarPixService },
+        { provide: TracksServiceWeb,    useClass: FakeTracksServiceWeb },
+        { provide: RouterService,       useClass: FakeRouterService }, 
+        // Se você não usa RouterService, pode remover essa linha
       ],
       schemas: [NO_ERRORS_SCHEMA],
     }).compileComponents();
 
     fixture   = TestBed.createComponent(WelcomeComponent);
     component = fixture.componentInstance;
-    tracks    = TestBed.inject(FakeTracksServiceWeb);
+    tracks    = TestBed.inject(TracksServiceWeb) as unknown as FakeTracksServiceWeb;
 
-    /* preenche manualmente os @ViewChilds usados nos métodos */
+    // Preenche manualmente @ViewChilds do componente
     [
       'arcContainer', 'textArea', 'btnContinuar', 'nextContent',
       'textLine1', 'textLine2', 'textLine3', 'lineKey',
@@ -65,15 +80,15 @@ describe('WelcomeComponent – high‑coverage spec', () => {
   it('deve chamar pageLoad no ngOnInit e programar carregamento de textos', () => {
     expect(tracks.pageLoad).toHaveBeenCalledTimes(1);
 
-    jest.advanceTimersByTime(600);  // loadingTextInicial
-    expect((component as any).textLine1.nativeElement.style.opacity).toBe('1');
+    jest.advanceTimersByTime(600); // loadingTextInicial
+    expect(component.textLine1.nativeElement.style.opacity).toBe('1');
 
-    jest.advanceTimersByTime(2400); // loadingTextTwo (total 3000 ms)
-    expect((component as any).textLine2.nativeElement.style.opacity).toBe('1');
+    jest.advanceTimersByTime(2400); // loadingTextTwo (total 3000ms)
+    expect(component.textLine2.nativeElement.style.opacity).toBe('1');
   });
 
   it('deve ajustar a largura da imagem em AfterViewInit', () => {
-    const img = (component.arcContainer.nativeElement.querySelector('img') as any) || {};
+    const img = component.arcContainer.nativeElement.querySelector('img') as any;
     expect(img.style.width).toBeDefined();
     expect(img.style.height).toBeDefined();
   });
@@ -89,7 +104,7 @@ describe('WelcomeComponent – high‑coverage spec', () => {
   /* ─────────────── onContinuarClick ─────────────── */
   it('onContinuarClick oculta textArea e move arco', () => {
     const moveSpy = jest
-      .spyOn(component as any, 'moveArcToRight')  // <- cast para evitar erro TS
+      .spyOn(component as any, 'moveArcoToRight') // ← se o método for moveArcToRight ou outro, troque aqui
       .mockImplementation(() => {});
 
     component.onContinuarClick();
@@ -103,16 +118,18 @@ describe('WelcomeComponent – high‑coverage spec', () => {
     expect(tracks.clickEvent).toHaveBeenCalled();
   });
 
-  /* ─────────────── moveArcToRight + showNextContent ─────────────── */
-  it('moveArcToRight altera movedRight, aplica blur e exibe próximo conteúdo', () => {
+  /* ─────────────── moveArcoToRight + showNextContent ─────────────── */
+  it('moveArcoToRight altera movedRight, aplica blur e exibe próximo conteúdo', () => {
     const content = fakeDomEl();
     document.querySelector = jest.fn(() => content);
 
-    component.moveArcToRight();
+    // Se o método é 'moveArcToRight', adapte o nome
+    component.moveArcoToRight();
 
     expect(component.movedRight).toBe(true);
     expect(content.classList.add).toHaveBeenCalledWith('blur-background');
-    expect(tracks.pageLoad).toHaveBeenCalledTimes(2); // ngOnInit + aqui
+    // tracks.pageLoad foi chamada 1x no onInit e 1x agora → total 2
+    expect(tracks.pageLoad).toHaveBeenCalledTimes(2);
 
     jest.advanceTimersByTime(3000); // showNextContent
     expect(component.nextContent.nativeElement.classList.add).toHaveBeenCalledWith('show');
