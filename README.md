@@ -1,3 +1,47 @@
+
+/**  Interceptor – só adiciona cabeçalhos quando houver valor  */
+generatedHeaders(): { [key: string]: string } {
+  const hash = this.generatedHash();
+  const h: Record<string, string> = {};
+
+  /* --- cabeçalhos sempre presentes --- */
+  h[environment.charon.headers.correlationID] = hash;
+  h[environment.charon.headers.itauXff]       = hash;
+  h[environment.charon.headers.itauFlowID]   = hash;
+  h[environment.charon.headers.userAgent]    = window.navigator.userAgent;
+
+  /* --- cabeçalhos condicionais --- */
+  this.addIfValue(h, environment.charon.headers.authToken,  window.authToken);
+  this.addIfValue(h, environment.charon.headers.itauCnpj,   this.store.cnpj);
+  this.addIfValue(h, environment.charon.headers.itauCpf,    this.store.cpf);
+  this.addIfValue(h, environment.charon.headers.revenue,    this.store.revenue);
+
+  /* --- headers de autorização da API --- */
+  h['X-Authorization'] = 'authorization';
+  h['X-App-Key']       = 'value-key';
+
+  /* bearer token (se existir) */
+  this.getToken();
+  if (this.token) {
+    h[environment.charon.headers.authorization] = `Bearer ${this.token}`;
+  }
+
+  return h;
+}
+
+/** helper privado: só insere se houver valor não-vazio */
+private addIfValue(
+  target: Record<string, string>,
+  headerName: string,
+  value: string | undefined | null,
+): void {
+  if (value) {
+    target[headerName] = value;
+  }
+}
+
+
+
 import {
   Component,
   OnInit,
